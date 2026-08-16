@@ -8,6 +8,7 @@ SECRET_KEY = 'django-insecure-your-secret-key-here'
 
 DEBUG = True
 ALLOWED_HOSTS = ['v-cordprod.relaxdev.ru', '.relaxdev.ru']  # Было ['*']
+CSRF_TRUSTED_ORIGINS = ['https://v-cordprod.relaxdev.ru', 'https://*.relaxdev.ru']
 
 INSTALLED_APPS = [
     'django.contrib.admin',

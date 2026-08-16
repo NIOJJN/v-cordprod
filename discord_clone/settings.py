@@ -1,14 +1,18 @@
-
 import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-your-secret-key-here'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-your-secret-key-here')
 
-DEBUG = True
-ALLOWED_HOSTS = ['v-cordprod.relaxdev.ru', '.relaxdev.ru']  # Было ['*']
-CSRF_TRUSTED_ORIGINS = ['https://v-cordprod.relaxdev.ru', 'https://*.relaxdev.ru']
+# Режим отладки — выключаем для продакшена
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+
+# Разрешенные хосты — берём из переменной окружения или используем список
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'v-cordprod.relaxdev.ru,.relaxdev.ru').split(',')
+
+# CSRF доверенные источники
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'https://v-cordprod.relaxdev.ru,https://*.relaxdev.ru').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -29,9 +33,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # WhiteNoise должен быть выше CommonMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -56,19 +60,32 @@ TEMPLATES = [
     },
 ]
 
-
 ASGI_APPLICATION = 'discord_clone.asgi.application'
 
-
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [('127.0.0.1', 6379)],
+# === НАСТРОЙКА REDIS (поддержка переменной REDIS_URL) ===
+REDIS_URL = os.environ.get('REDIS_URL')
+if REDIS_URL:
+    # Если REDIS_URL задан (например, от Upstash), используем его
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+            },
         },
-    },
-}
+    }
+else:
+    # Если REDIS_URL не задан — используем локальный Redis (для разработки)
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [('127.0.0.1', 6379)],
+            },
+        },
+    }
 
+# База данных — SQLite (для простоты)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',

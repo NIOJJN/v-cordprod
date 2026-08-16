@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Настройки | Discord Clone{% endblock %}
+
+{% block content %}
+<div class="app-layout">
+    <div class="servers-bar">
+        <div class="server-item" onclick="location.href='{% url 'direct_messages' %}'" title="Главная">
+            <i class="fab fa-discord"></i>
+        </div>
+        <div class="server-divider"></div>
+        {% for s in request.user.servers.all %}
+        <div class="server-item" onclick="location.href='{% url 'server_view' s.id %}'" title="{{ s.name }}">
+            {% if s.icon %}<img src="{{ s.icon.url }}" alt="{{ s.name }}">{% else %}{{ s.name|slice:":1"|upper }}{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="main-area">
+        <div class="main-header">
+            <div class="header-info">
+                <i class="fas fa-user-cog" style="color:#f0b232;"></i>
+                <h4>Настройки профиля</h4>
+            </div>
+            <div class="header-actions">
+                <button onclick="history.back()" title="Назад"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+
+        <div class="messages-area">
+            <div style="padding:32px;max-width:800px;margin:0 auto;">
+
+                <!-- Аватар + Форма -->
+                <div style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.05);border-radius:16px;padding:32px;margin-bottom:24px;box-shadow:var(--shadow-lg);">
+                    <div style="display:flex;gap:32px;flex-wrap:wrap;">
+                        
+                        <!-- Аватар -->
+                        <div style="text-align:center;flex-shrink:0;">
+                            <div style="position:relative;display:inline-block;margin-bottom:12px;">
+                                <img src="{{ request.user.avatar.url }}" id="avatarPreview"
+                                     style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:4px solid var(--bg-primary);box-shadow:var(--shadow-lg);">
+                                <label for="avatarUpload" style="position:absolute;bottom:0;right:0;background:linear-gradient(135deg,#f0b232,#f5a623);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:3px solid var(--bg-card);box-shadow:0 0 15px rgba(240,178,50,0.3);transition:0.2s;"
+                                       onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                                    <i class="fas fa-camera" style="color:#000;font-size:14px;"></i>
+                                </label>
+                            </div>
+                            <input type="file" name="avatar" id="avatarUpload" accept="image/*" style="display:none;" onchange="previewAvatar(this)" form="profileForm">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('avatarUpload').click()">
+                                <i class="fas fa-upload"></i> Загрузить
+                            </button>
+                            <p style="color:var(--text-muted);font-size:11px;margin-top:8px;">300×300 px, макс 2 МБ</p>
+                        </div>
+
+                        <!-- Форма -->
+                        <div style="flex:1;min-width:280px;">
+                            <form method="post" enctype="multipart/form-data" id="profileForm">
+                                {% csrf_token %}
+                                
+                                <div style="margin-bottom:16px;">
+                                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;display:block;">Имя пользователя</label>
+                                    <input type="text" name="username" value="{{ form.username.value|default:request.user.username }}" required
+                                           style="width:100%;padding:10px 14px;background:var(--bg-input);border:2px solid transparent;border-radius:8px;color:#fff;font-size:15px;outline:none;transition:0.2s;"
+                                           onfocus="this.style.borderColor='#f0b232';this.style.boxShadow='0 0 0 3px rgba(240,178,50,0.15)'"
+                                           onblur="this.style.borderColor='transparent';this.style.boxShadow='none'">
+                                </div>
+
+                                <div style="margin-bottom:16px;">
+                                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;display:block;">Email</label>
+                                    <input type="email" name="email" value="{{ form.email.value|default:request.user.email }}" required
+                                           style="width:100%;padding:10px 14px;background:var(--bg-input);border:2px solid transparent;border-radius:8px;color:#fff;font-size:15px;outline:none;transition:0.2s;"
+                                           onfocus="this.style.borderColor='#f0b232';this.style.boxShadow='0 0 0 3px rgba(240,178,50,0.15)'"
+                                           onblur="this.style.borderColor='transparent';this.style.boxShadow='none'">
+                                </div>
+
+                                <div style="margin-bottom:16px;">
+                                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;display:block;">О себе</label>
+                                    <textarea name="bio" rows="3" placeholder="Расскажите о себе..."
+                                              style="width:100%;padding:10px 14px;background:var(--bg-input);border:2px solid transparent;border-radius:8px;color:#fff;font-size:15px;outline:none;resize:vertical;transition:0.2s;"
+                                              onfocus="this.style.borderColor='#f0b232';this.style.boxShadow='0 0 0 3px rgba(240,178,50,0.15)'"
+                                              onblur="this.style.borderColor='transparent';this.style.boxShadow='none'">{{ form.bio.value|default:request.user.bio|default:'' }}</textarea>
+                                </div>
+
+                                <div style="margin-bottom:20px;">
+                                    <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;display:block;">Статус</label>
+                                    <div style="position:relative;">
+                                        <i class="fas fa-comment" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);"></i>
+                                        <input type="text" name="custom_status" value="{{ form.custom_status.value|default:request.user.custom_status|default:'' }}" placeholder="Установите статус"
+                                               style="width:100%;padding:10px 14px 10px 40px;background:var(--bg-input);border:2px solid transparent;border-radius:8px;color:#fff;font-size:15px;outline:none;transition:0.2s;"
+                                               onfocus="this.style.borderColor='#f0b232';this.style.boxShadow='0 0 0 3px rgba(240,178,50,0.15)'"
+                                               onblur="this.style.borderColor='transparent';this.style.boxShadow='none'">
+                                    </div>
+                                </div>
+
+                                <div style="display:flex;gap:10px;">
+                                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Сохранить</button>
+                                    <button type="button" class="btn btn-secondary" onclick="history.back()">Отмена</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Статус -->
+                <div style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.05);border-radius:16px;padding:24px 32px;margin-bottom:24px;box-shadow:var(--shadow);">
+    <h5 style="font-weight:700;margin-bottom:16px;">Статус</h5>
+    <div style="display:flex;flex-direction:column;gap:2px;">
+        
+        <!-- В сети -->
+        <label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;cursor:pointer;transition:0.2s;"
+               onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='none'">
+            <input type="radio" name="status" value="online" {% if request.user.status == "online" %}checked{% endif %}
+                   style="accent-color:#f0b232;width:16px;height:16px;cursor:pointer;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#23a559;"></span>
+            <span style="font-weight:600;font-size:14px;">В сети</span>
+            <span style="color:var(--text-muted);font-size:12px;margin-left:auto;">Все видят вас онлайн</span>
+        </label>
+
+        <!-- Не активен -->
+        <label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;cursor:pointer;transition:0.2s;"
+               onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='none'">
+            <input type="radio" name="status" value="idle" {% if request.user.status == "idle" %}checked{% endif %}
+                   style="accent-color:#f0b232;width:16px;height:16px;cursor:pointer;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#f0b232;"></span>
+            <span style="font-weight:600;font-size:14px;">Не активен</span>
+            <span style="color:var(--text-muted);font-size:12px;margin-left:auto;">Вы отошли от компьютера</span>
+        </label>
+
+        <!-- Не беспокоить -->
+        <label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;cursor:pointer;transition:0.2s;"
+               onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='none'">
+            <input type="radio" name="status" value="dnd" {% if request.user.status == "dnd" %}checked{% endif %}
+                   style="accent-color:#f0b232;width:16px;height:16px;cursor:pointer;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#f23f43;"></span>
+            <span style="font-weight:600;font-size:14px;">Не беспокоить</span>
+            <span style="color:var(--text-muted);font-size:12px;margin-left:auto;">Вы не будете получать уведомления</span>
+        </label>
+
+        <!-- Невидимый -->
+        <label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;cursor:pointer;transition:0.2s;"
+               onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='none'">
+            <input type="radio" name="status" value="offline" {% if request.user.status == "offline" %}checked{% endif %}
+                   style="accent-color:#f0b232;width:16px;height:16px;cursor:pointer;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#747f8d;"></span>
+            <span style="font-weight:600;font-size:14px;">Невидимый</span>
+            <span style="color:var(--text-muted);font-size:12px;margin-left:auto;">Вас никто не видит онлайн</span>
+        </label>
+
+    </div>
+</div>
+
+
+                <!-- Пароль -->
+                <div style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.05);border-radius:16px;padding:24px 32px;box-shadow:var(--shadow);">
+                    <h5 style="font-weight:700;margin-bottom:16px;">Сменить пароль</h5>
+                    <div style="display:flex;flex-direction:column;gap:14px;max-width:400px;">
+                        <input type="password" placeholder="Текущий пароль"
+                               style="width:100%;padding:10px 14px;background:var(--bg-input);border:2px solid transparent;border-radius:8px;color:#fff;font-size:15px;outline:none;transition:0.2s;"
+                               onfocus="this.style.borderColor='#f0b232';this.style.boxShadow='0 0 0 3px rgba(240,178,50,0.15)'"
+                               onblur="this.style.borderColor='transparent';this.style.boxShadow='none'">
+                        <input type="password" placeholder="Новый пароль"
+                               style="width:100%;padding:10px 14px;background:var(--bg-input);border:2px solid transparent;border-radius:8px;color:#fff;font-size:15px;outline:none;transition:0.2s;"
+                               onfocus="this.style.borderColor='#f0b232';this.style.boxShadow='0 0 0 3px rgba(240,178,50,0.15)'"
+                               onblur="this.style.borderColor='transparent';this.style.boxShadow='none'">
+                        <input type="password" placeholder="Подтвердите пароль"
+                               style="width:100%;padding:10px 14px;background:var(--bg-input);border:2px solid transparent;border-radius:8px;color:#fff;font-size:15px;outline:none;transition:0.2s;"
+                               onfocus="this.style.borderColor='#f0b232';this.style.boxShadow='0 0 0 3px rgba(240,178,50,0.15)'"
+                               onblur="this.style.borderColor='transparent';this.style.boxShadow='none'">
+                        <button class="btn btn-secondary" style="width:auto;"><i class="fas fa-key"></i> Сменить пароль</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function previewAvatar(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) { document.getElementById('avatarPreview').src = e.target.result; };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+document.querySelectorAll('input[name="status"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        document.querySelectorAll('input[name="status"]').forEach(function(r) {
+            r.closest('label').style.background = 'none';
+        });
+        if (this.checked) this.closest('label').style.background = 'var(--bg-hover)';
+    });
+});
+
+(function() {
+    var status = '{{ request.user.status }}';
+    if (status) {
+        var radio = document.querySelector('input[name="status"][value="' + status + '"]');
+        if (radio) { radio.checked = true; radio.closest('label').style.background = 'var(--bg-hover)'; }
+    }
+})();
+</script>
+{% endblock %}

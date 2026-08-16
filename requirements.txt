@@ -1,0 +1,9 @@
+Django>=5.2
+channels==4.0.0
+daphne==4.0.0
+channels-redis==4.1.0
+Pillow>=11.0.0
+redis==5.0.1
+django-crispy-forms==2.1
+crispy-bootstrap5==2023.10
+whitenoise==6.12.0

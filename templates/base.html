@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Discord Clone{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/discord_style.css' %}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% csrf_token %}
+    
+    {% block content %}{% endblock %}
+
+    <!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ СЕРВЕРА (Решает вашу ошибку) -->
+    <div class="modal fade" id="createServerModal" tabindex="-1" aria-labelledby="createServerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: #313338; color: #f2f3f5; border: none; border-radius: 8px;">
+                <div class="modal-header text-center border-0 pb-0 justify-content-center position-relative">
+                    <h4 class="modal-title fw-bold w-100 mt-2" id="createServerModalLabel" style="color: #fff;">Создайте свой сервер</h4>
+                    <button type="button" class="btn-close btn-close-white position-absolute end-0 top-0 m-3" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body px-4 text-center">
+                    <p style="color: #b5bac1; font-size: 14px;">Сервер — это место, где вы общаетесь с друзьями. Создайте свой собственный и начните общение.</p>
+                    
+                    <!-- Форма отправки на бэкенд Django -->
+                    <form action="{% url 'create_server' %}" method="POST" enctype="multipart/form-data" class="text-start mt-3">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="serverName" class="form-label text-uppercase fw-bold small" style="color: #b5bac1; font-size: 12px;">Название сервера</label>
+                            <input type="text" class="form-control" id="serverName" name="name" required
+                                   style="background: #1e1f22; border: none; color: #dbdee1; padding: 10px;"
+                                   value="{{ request.user.username }}'s server">
+                        </div>
+                        <div class="mb-4">
+                            <label for="serverIcon" class="form-label text-uppercase fw-bold small" style="color: #b5bac1; font-size: 12px;">Иконка сервера (необязательно)</label>
+                            <input type="file" class="form-control" id="serverIcon" name="icon" accept="image/*"
+                                   style="background: #1e1f22; border: none; color: #dbdee1;">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-4 pt-2" style="background: #2b2d31; margin: 0 -24px -24px -24px; padding: 16px 24px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                            <button type="button" class="btn text-white p-0 style-none" data-bs-dismiss="modal" style="background: none; border: none;">Назад</button>
+                            <button type="submit" class="btn px-4 text-white" style="background: #5865f2; border: none;">Создать</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+    function getCSRFToken() {
+        var token = document.querySelector('[name=csrfmiddlewaretoken]');
+        return token ? token.value : '';
+    }
+    
+    function joinServer() {
+        var code = document.getElementById('inviteCode');
+        if (code && code.value.trim()) {
+            location.href = '/servers/join/' + code.value.trim() + '/';
+        }
+    }
+    
+    function acceptFriendRequest(id) {
+        fetch('/accounts/friend-request/accept/' + id + '/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCSRFToken()}
+        }).then(function() { location.reload(); });
+    }
+    
+    function declineFriendRequest(id) {
+        fetch('/accounts/friend-request/decline/' + id + '/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCSRFToken()}
+        }).then(function() { location.reload(); });
+    }
+    
+    function sendFriendRequest(userId) {
+        fetch('/accounts/friend-request/send/' + userId + '/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCSRFToken()}
+        }).then(function(r) { return r.json(); })
+          .then(function(d) {
+              if (d.success) location.reload();
+              else alert(d.error || 'Ошибка');
+          });
+    }
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,321 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Личные сообщения | Discord Clone{% endblock %}
+
+{% block content %}
+<div class="app-layout">
+    <!-- Левый сайдбар серверов -->
+    <div class="servers-bar">
+        <div class="server-item active" onclick="location.href='{% url 'direct_messages' %}'" title="Главная">
+            <i class="fab fa-discord"></i>
+        </div>
+        <div class="server-divider"></div>
+        
+        {% for s in request.user.servers.all %}
+        <div class="server-item" onclick="location.href='{% url 'server_view' s.id %}'" title="{{ s.name }}">
+            {% if s.icon %}
+            <img src="{{ s.icon.url }}" alt="{{ s.name }}">
+            {% else %}
+            {{ s.name|slice:":1"|upper }}
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <div class="server-item add" data-bs-toggle="modal" data-bs-target="#createServerModal" title="Создать сервер">
+            <i class="fas fa-plus"></i>
+        </div>
+    </div>
+
+    <!-- Сайдбар друзей -->
+    <div class="channels-bar">
+        <div class="channels-header">
+            <h5><i class="fas fa-user-friends me-2"></i>Друзья</h5>
+            <button class="btn btn-sm" style="background: none; border: none; color: var(--text-muted);" 
+                    onclick="openSearchModal()">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+        
+        <div class="channels-list">
+            {% for friend in friends %}
+            <div class="channel-item {% if current_friend and current_friend.id == friend.id %}active{% endif %}"
+                 onclick="location.href='{% url 'direct_message' friend.id %}'">
+                <img src="{{ friend.avatar.url }}" alt="{{ friend.username }}" 
+                     style="width: 32px; height: 32px; border-radius: 50%;">
+                <span>{{ friend.username }}</span>
+                {% if friend.is_online %}
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0;"></span>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div class="text-center text-muted p-3 small text-white "  style="opacity: 0.5;">
+                <i class="fas fa-user-friends fa-2x mb-2 d-block text-white" style="opacity: 0.5;"></i>
+                <p class="text-white" >Нет друзей. Используйте поиск чтобы найти друзей.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Панель пользователя -->
+        <div class="user-bar">
+            <img src="{{ request.user.avatar.url }}" alt="" class="user-avatar" 
+                 onclick="location.href='{% url 'profile' request.user.id %}'">
+            <div class="user-info" onclick="location.href='{% url 'profile' request.user.id %}'">
+                <div class="user-name">{{ request.user.username }}</div>
+                <div class="user-tag">Онлайн</div>
+            </div>
+            <div class="user-actions">
+                <button onclick="location.href='{% url 'edit_profile' %}'" title="Настройки">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button onclick="location.href='{% url 'logout' %}'" title="Выйти">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основная область -->
+    <div class="main-area">
+        {% if current_friend %}
+        <!-- Заголовок -->
+        <div class="main-header">
+            <div class="header-info">
+                <img src="{{ current_friend.avatar.url }}" alt="{{ current_friend.username }}" 
+                     style="width: 32px; height: 32px; border-radius: 50%;">
+                <h4>{{ current_friend.username }}</h4>
+                <span class="badge {% if current_friend.is_online %}bg-success{% else %}bg-secondary{% endif %}">
+                    {{ current_friend.get_status_display }}
+                </span>
+            </div>
+            <div class="header-actions">
+                <button onclick="location.href='{% url 'profile' current_friend.id %}'" title="Профиль">
+                    <i class="fas fa-user"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Сообщения -->
+        <div class="messages-area" id="dmMessagesContainer">
+            {% for message in messages %}
+            <div class="message-group">
+                <img src="{{ message.sender.avatar.url }}" alt="{{ message.sender.username }}" class="message-avatar">
+                <div class="message-body">
+                    <div class="message-header">
+                        <span class="message-author">{{ message.sender.username }}</span>
+                        <span class="message-time">{{ message.timestamp|date:"d.m.Y H:i" }}</span>
+                    </div>
+                    <div class="message-text">{{ message.content }}</div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center text-muted py-5">
+                <img src="{{ current_friend.avatar.url }}" alt="" 
+                     style="width: 80px; height: 80px; border-radius: 50%; margin-bottom: 16px;">
+                <h5>{{ current_friend.username }}</h5>
+                <p class="small">Это начало вашего личного чата. Отправьте сообщение!</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Поле ввода -->
+        <div class="input-area">
+            <div class="input-container">
+                <textarea id="dmMessageInput" rows="1" placeholder="Напишите сообщение {{ current_friend.username }}"></textarea>
+                <button class="send-button" id="sendDmMessageBtn" title="Отправить">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+        {% else %}
+        <div class="home-content">
+            <div>
+                <div class="welcome-icon"><i class="fas fa-comments"></i></div>
+                <h2>Личные сообщения</h2>
+                <p>Выберите друга слева для начала разговора</p>
+                <button class="btn btn-primary" style="width: auto;" onclick="openSearchModal()">
+                    <i class="fas fa-search"></i> Найти друзей
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Модальное окно поиска -->
+<div id="searchModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="background: var(--bg-primary); border-radius: 8px; width: 100%; max-width: 480px; padding: 24px; border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h5 style="margin: 0; color: var(--text-primary);">Найти друзей</h5>
+            <button onclick="closeSearchModal()" style="background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; line-height: 1;">&times;</button>
+        </div>
+        <input type="text" id="searchInput" class="form-control" 
+               style="background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary);" 
+               placeholder="Введите имя пользователя">
+        <div id="searchResults" class="search-results mt-3"></div>
+    </div>
+</div>
+
+{% if current_friend %}
+<script>
+// WebSocket для личных сообщений
+let dmSocket = null;
+
+function connectDmSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    dmSocket = new WebSocket(protocol + '//' + window.location.host + '/ws/dm/{{ current_friend.id }}/');
+    
+    dmSocket.onopen = function() {
+        console.log('DM WebSocket подключен');
+    };
+    
+    dmSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        
+        if (data.type === 'dm_message') {
+            addDmMessage(data);
+        }
+    };
+    
+    dmSocket.onerror = function(e) {
+        console.error('DM WebSocket ошибка:', e);
+    };
+    
+    dmSocket.onclose = function() {
+        console.log('DM WebSocket отключен');
+        setTimeout(connectDmSocket, 3000);
+    };
+}
+
+// Подключаемся
+connectDmSocket();
+
+// Добавление сообщения
+function addDmMessage(data) {
+    const container = document.getElementById('dmMessagesContainer');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'message-group';
+    
+    const now = new Date();
+    const time = now.toLocaleString('ru-RU', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+    
+    msgDiv.innerHTML = `
+        <img src="${data.avatar || '/media/avatars/default.png'}" 
+             alt="${data.sender_username}" class="message-avatar">
+        <div class="message-body">
+            <div class="message-header">
+                <span class="message-author">${data.sender_username}</span>
+                <span class="message-time">${time}</span>
+            </div>
+            <div class="message-text">${escapeHtml(data.message)}</div>
+        </div>
+    `;
+    
+    container.appendChild(msgDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+// Отправка сообщения
+function sendDmMessage() {
+    const input = document.getElementById('dmMessageInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    if (!dmSocket || dmSocket.readyState !== WebSocket.OPEN) {
+        alert('Нет подключения. Перезагрузите страницу.');
+        return;
+    }
+    
+    dmSocket.send(JSON.stringify({
+        message: message,
+        recipient_id: {{ current_friend.id }}
+    }));
+    
+    input.value = '';
+    input.style.height = 'auto';
+}
+
+document.getElementById('sendDmMessageBtn').addEventListener('click', sendDmMessage);
+
+document.getElementById('dmMessageInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendDmMessage();
+    }
+});
+
+// Авто-ресайз textarea
+document.getElementById('dmMessageInput').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+});
+
+// Экранирование HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endif %}
+
+<script>
+// Поиск пользователей
+document.getElementById('searchInput').addEventListener('input', function() {
+    const q = this.value.trim();
+    if (q.length < 2) {
+        document.getElementById('searchResults').innerHTML = '';
+        return;
+    }
+    
+    fetch('/accounts/search/?q=' + encodeURIComponent(q))
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('searchResults').innerHTML = html;
+        });
+});
+
+// Модальное окно поиска
+function openSearchModal() {
+    document.getElementById('searchModal').style.display = 'flex';
+}
+
+function closeSearchModal() {
+    document.getElementById('searchModal').style.display = 'none';
+}
+
+// Закрыть по клику вне окна
+document.getElementById('searchModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeSearchModal();
+    }
+});
+
+// Отправить запрос в друзья
+function sendFriendRequest(userId) {
+    fetch('/accounts/friend-request/send/' + userId + '/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Запрос в друзья отправлен!');
+            closeSearchModal();
+        } else {
+            alert(data.error || 'Ошибка при отправке запроса');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Произошла ошибка');
+    });
+}
+</script>
+{% endblock %}

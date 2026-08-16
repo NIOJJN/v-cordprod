@@ -1,0 +1,222 @@
+<!-- templates/servers/home.html -->
+{% extends 'base.html' %}
+
+{% block title %}Главная | Discord Clone{% endblock %}
+
+{% block content %}
+<div class="app-layout">
+    <!-- Сайдбар серверов -->
+    <div class="servers-bar">
+        <div class="server-item active" title="Главная">
+            <i class="fab fa-discord"></i>
+        </div>
+        <div class="server-divider"></div>
+        
+        {% for server in servers %}
+        <div class="server-item" onclick="location.href='{% url 'server_view' server.id %}'" title="{{ server.name }}">
+            {% if server.icon %}
+            <img src="{{ server.icon.url }}" alt="{{ server.name }}">
+            {% else %}
+            {{ server.name|slice:":1"|upper }}
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <div class="server-item add" data-bs-toggle="modal" data-bs-target="#createServerModal" title="Создать сервер">
+            <i class="fas fa-plus"></i>
+        </div>
+    </div>
+
+    <!-- Сайдбар друзей -->
+    <div class="channels-bar">
+        <div class="channels-header">
+            <h5><i class="fas fa-user-friends me-2"></i>Друзья</h5>
+            <button class="btn btn-sm" style="background: none; border: none; color: var(--text-muted);" 
+                    data-bs-toggle="modal" data-bs-target="#searchModal">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+        
+        <div class="channels-list">
+            <!-- Онлайн -->
+            <div class="channel-category">
+                <div class="category-title">
+                    <i class="fas fa-chevron-down"></i> В СЕТИ
+                </div>
+                {% for friend in friends %}
+                {% if friend.is_online %}
+                <div class="channel-item" onclick="location.href='{% url 'direct_message' friend.id %}'">
+                    <img src="{{ friend.avatar.url }}" alt="" style="width:32px;height:32px;border-radius:50%;">
+                    <span>{{ friend.username }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- Офлайн -->
+            <div class="channel-category">
+                <div class="category-title">
+                    <i class="fas fa-chevron-down"></i> НЕ В СЕТИ
+                </div>
+                {% for friend in friends %}
+                {% if not friend.is_online %}
+                <div class="channel-item" onclick="location.href='{% url 'direct_message' friend.id %}'">
+                    <img src="{{ friend.avatar.url }}" alt="" style="width:32px;height:32px;border-radius:50%; opacity: 0.4;">
+                    <span style="opacity: 0.6;">{{ friend.username }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- Запросы в друзья -->
+            {% if friend_requests %}
+            <div class="channel-category">
+                <div class="category-title">ЗАПРОСЫ В ДРУЗЬЯ — {{ friend_requests|length }}</div>
+                {% for request in friend_requests %}
+                <div class="p-2 mb-2 rounded" style="background: var(--bg-hover);">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <img src="{{ request.from_user.avatar.url }}" alt="" style="width:32px;height:32px;border-radius:50%;">
+                        <span class="small fw-bold flex-1">{{ request.from_user.username }}</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary" onclick="acceptRequest({{ request.id }})">Принять</button>
+                        <button class="btn btn-sm btn-secondary" onclick="declineRequest({{ request.id }})">Отклонить</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Панель пользователя -->
+        <div class="user-bar">
+            <img src="{{ request.user.avatar.url }}" alt="" class="user-avatar">
+            <div class="user-info">
+                <div class="user-name">{{ request.user.username }}</div>
+                <div class="user-tag">#{{ request.user.id }}</div>
+            </div>
+            <div class="user-actions">
+                <button onclick="location.href='{% url 'edit_profile' %}'" title="Настройки">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button onclick="location.href='{% url 'logout' %}'" title="Выйти">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Главная область -->
+    <div class="main-area">
+        <div class="home-content">
+            <div>
+                <div class="welcome-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <h2>Добро пожаловать!</h2>
+                <p>Выберите друга или сервер для начала общения</p>
+                <div>
+                    <button class="btn btn-primary me-2" style="width: auto;" data-bs-toggle="modal" data-bs-target="#createServerModal">
+                        <i class="fas fa-plus"></i> Создать сервер
+                    </button>
+                    <button class="btn btn-secondary" style="width: auto;" data-bs-toggle="modal" data-bs-target="#joinServerModal">
+                        <i class="fas fa-sign-in-alt"></i> Присоединиться
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно создания сервера -->
+<div class="modal fade" id="createServerModal" tabindex="-1"  data-bs-backdrop="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>Создать сервер</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'create_server' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>НАЗВАНИЕ СЕРВЕРА</label>
+                        <input type="text" name="name" class="form-control" placeholder="Введите название" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-sm btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно присоединения -->
+<div class="modal fade" id="joinServerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>Присоединиться к серверу</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>КОД ПРИГЛАШЕНИЯ</label>
+                    <input type="text" id="inviteCode" class="form-control" placeholder="Введите код">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="joinServer()">Присоединиться</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно поиска -->
+<div class="modal fade" id="searchModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>Поиск друзей</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="searchInput" class="form-control mb-3" placeholder="Введите имя пользователя">
+                <div id="searchResults" class="search-results"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function joinServer() {
+    const code = document.getElementById('inviteCode').value.trim();
+    if (code) location.href = '/servers/join/' + code + '/';
+}
+
+function acceptRequest(id) {
+    fetch('/accounts/friend-request/accept/' + id + '/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value}
+    }).then(() => location.reload());
+}
+
+function declineRequest(id) {
+    fetch('/accounts/friend-request/decline/' + id + '/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value}
+    }).then(() => location.reload());
+}
+
+document.getElementById('searchInput').addEventListener('input', function() {
+    const q = this.value.trim();
+    if (q.length < 2) { document.getElementById('searchResults').innerHTML = ''; return; }
+    fetch('/accounts/search/?q=' + q)
+        .then(r => r.text())
+        .then(html => document.getElementById('searchResults').innerHTML = html);
+});
+</script>
+{% endblock %}

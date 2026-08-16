@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ profile_user.username }} | Discord Clone{% endblock %}
+
+{% block content %}
+<div class="app-layout">
+    <div class="servers-bar">
+        <div class="server-item" onclick="location.href='{% url 'direct_messages' %}'" title="Главная">
+            <i class="fab fa-discord"></i>
+        </div>
+        <div class="server-divider"></div>
+        {% for s in request.user.servers.all %}
+        <div class="server-item" onclick="location.href='{% url 'server_view' s.id %}'" title="{{ s.name }}">
+            {% if s.icon %}<img src="{{ s.icon.url }}" alt="{{ s.name }}">{% else %}{{ s.name|slice:":1"|upper }}{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="main-area">
+        <div class="messages-area">
+            <!-- Баннер -->
+            <div style="height:180px;background:linear-gradient(135deg,#f0b232,#f5a623,#d4a020);border-radius:0 0 16px 16px;position:relative;margin-bottom:70px;">
+                <div style="position:absolute;bottom:-55px;left:40px;display:flex;align-items:flex-end;gap:20px;">
+                    <div style="position:relative;">
+                        <img src="{{ profile_user.avatar.url }}" alt="{{ profile_user.username }}" 
+                             style="width:110px;height:110px;border-radius:50%;border:6px solid var(--bg-primary);object-fit:cover;box-shadow:0 8px 30px rgba(0,0,0,0.4);">
+                        <span style="position:absolute;bottom:8px;right:8px;width:22px;height:22px;border-radius:50%;
+                                   background:{{ profile_user.is_online|yesno:'#23a559,#747f8d' }};
+                                   border:4px solid var(--bg-primary);box-shadow:0 0 10px {{ profile_user.is_online|yesno:'rgba(35,165,89,0.5),rgba(116,127,141,0.3)' }};"></span>
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <h2 style="font-size:28px;font-weight:800;margin:0;">{{ profile_user.username }}</h2>
+                        <span style="color:var(--text-muted);font-size:14px;">@{{ profile_user.username }}#{{ profile_user.id }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Контент -->
+            <div style="padding:0 40px;max-width:700px;">
+                <!-- Карточка -->
+                <div style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.05);border-radius:16px;padding:28px;box-shadow:var(--shadow-lg);margin-bottom:24px;">
+                    
+                    <!-- Статус -->
+                    <div style="margin-bottom:24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <span style="padding:8px 16px;border-radius:20px;font-size:14px;font-weight:600;
+                                   background:{{ profile_user.is_online|yesno:'rgba(35,165,89,0.15),rgba(116,127,141,0.1)' }};
+                                   color:{{ profile_user.is_online|yesno:'#23a559,#747f8d' }};">
+                            <i class="fas fa-circle me-1" style="font-size:8px;"></i>{{ profile_user.get_status_display }}
+                        </span>
+                        {% if profile_user.custom_status %}
+                        <span style="color:var(--text-secondary);font-size:14px;">
+                            <i class="fas fa-comment me-1"></i>{{ profile_user.custom_status }}
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Био -->
+                    {% if profile_user.bio %}
+                    <div style="margin-bottom:24px;">
+                        <h6 style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px;">О себе</h6>
+                        <p style="color:var(--text-primary);line-height:1.7;font-size:15px;">{{ profile_user.bio }}</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- Дата -->
+                    <div style="padding-top:20px;border-top:1px solid rgba(255,255,255,0.05);margin-bottom:24px;">
+                        <h6 style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:6px;">На платформе с</h6>
+                        <p style="color:var(--text-secondary);font-size:14px;">
+                            <i class="fas fa-calendar-alt me-2"></i>{{ profile_user.date_joined|date:"d F Y г." }}
+                        </p>
+                    </div>
+
+                    <!-- Кнопки -->
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        {% if profile_user == request.user %}
+                        <button class="btn btn-secondary" onclick="location.href='{% url 'edit_profile' %}'">
+                            <i class="fas fa-edit"></i> Редактировать
+                        </button>
+                        {% else %}
+                            {% if is_friend %}
+                            <button class="btn btn-primary" onclick="location.href='{% url 'direct_message' profile_user.id %}'">
+                                <i class="fas fa-comment"></i> Сообщение
+                            </button>
+                            <button class="btn btn-secondary" disabled><i class="fas fa-check"></i> В друзьях</button>
+                            {% elif sent_request %}
+                            <button class="btn btn-secondary" disabled><i class="fas fa-clock"></i> Запрос отправлен</button>
+                            {% else %}
+                            <button class="btn btn-primary" onclick="sendRequest({{ profile_user.id }})">
+                                <i class="fas fa-user-plus"></i> В друзья
+                            </button>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function sendRequest(id) {
+    fetch('/accounts/friend-request/send/' + id + '/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCSRFToken()}
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else alert(d.error || 'Ошибка');
+    });
+}
+</script>
+{% endblock %}

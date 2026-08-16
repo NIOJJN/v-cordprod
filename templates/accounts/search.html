@@ -1,0 +1,14 @@
+{% for user in users %}
+<div class="d-flex align-items-center gap-2 mb-2 p-2 rounded" style="background-color: #32353b;">
+    <img src="{{ user.avatar.url }}" alt="" style="width: 32px; height: 32px; border-radius: 50%;">
+    <div class="flex-grow-1">
+        <div class="small fw-bold">{{ user.username }}</div>
+    </div>
+    <button class="btn btn-sm" style="background-color: #5865f2; color: white;" 
+            onclick="sendFriendRequest({{ user.id }})">
+        <i class="fas fa-user-plus"></i> Добавить
+    </button>
+</div>
+{% empty %}
+<div class="text-muted p-2">Пользователи не найдены</div>
+{% endfor %}

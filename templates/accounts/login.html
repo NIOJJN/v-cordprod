@@ -1,0 +1,50 @@
+<!-- templates/accounts/login.html -->
+{% extends 'base.html' %}
+
+{% block title %}Вход | Discord Clone{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <i class="fab fa-discord"></i>
+        </div>
+        <h2 class="auth-title">С возвращением!</h2>
+        <p class="auth-subtitle">Мы так рады видеть тебя снова!</p>
+
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label>ЭЛЕКТРОННАЯ ПОЧТА ИЛИ ИМЯ ПОЛЬЗОВАТЕЛЯ</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-user"></i>
+                    <input type="text" name="username" placeholder="user@example.com" required autofocus>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>ПАРОЛЬ</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" name="password" placeholder="••••••••" required>
+                </div>
+            </div>
+
+            {% if form.errors %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-circle"></i> Неверное имя пользователя или пароль
+            </div>
+            {% endif %}
+
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-sign-in-alt"></i> Войти
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            <p>Нужна учетная запись? <a href="{% url 'register' %}">Зарегистрироваться</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

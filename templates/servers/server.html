@@ -1,0 +1,1552 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ server.name }} | Discord Clone{% endblock %}
+
+{% block content %}
+<div class="app-layout">
+    <!-- Левый сайдбар серверов -->
+    <div class="servers-bar">
+        <div class="server-item" onclick="location.href='{% url 'direct_messages' %}'" title="Главная">
+            <i class="fab fa-discord"></i>
+        </div>
+        <div class="server-divider"></div>
+        
+        {% for s in request.user.servers.all %}
+        <div class="server-item {% if s.id == server.id %}active{% endif %}" 
+             onclick="location.href='{% url 'server_view' s.id %}'" 
+             title="{{ s.name }}">
+            {% if s.icon %}
+            <img src="{{ s.icon.url }}" alt="{{ s.name }}">
+            {% else %}
+            {{ s.name|slice:":1"|upper }}
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <div class="server-item add" data-bs-toggle="modal" data-bs-target="#createServerModal" title="Создать сервер">
+            <i class="fas fa-plus"></i>
+        </div>
+    </div>
+
+    <!-- Сайдбар каналов -->
+    <div class="channels-bar">
+        <div class="channels-header" data-bs-toggle="dropdown">
+            <h5>{{ server.name }}</h5>
+            <i class="fas fa-chevron-down text-muted small"></i>
+        </div>
+        
+        <!-- Выпадающее меню сервера -->
+        <ul class="dropdown-menu dropdown-menu-dark" style="background-color: var(--bg-primary); border: 1px solid var(--border);">
+            {% if is_owner %}
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#createChannelModal">
+                <i class="fas fa-plus me-2"></i> Создать канал
+            </a></li>
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#createCategoryModal">
+                <i class="fas fa-folder-plus me-2"></i> Создать категорию
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            {% endif %}
+            <li><a class="dropdown-item" href="#" onclick="copyInvite('{{ server.invite_code }}')">
+                <i class="fas fa-link me-2"></i> Пригласить людей
+            </a></li>
+        </ul>
+
+        <div class="channels-list">
+            {% for category in categories %}
+            <div class="channel-category">
+                <div class="category-title" onclick="toggleCategory(this)">
+                    <i class="fas fa-chevron-down"></i> {{ category.name|upper }}
+                    {% if is_owner %}
+                    <i class="fas fa-plus ms-auto small" data-bs-toggle="modal" data-bs-target="#createChannelModal" 
+                       onclick="event.stopPropagation(); setCategory('{{ category.id }}')"></i>
+                    {% endif %}
+                </div>
+                
+                <div class="category-channels">
+                    {% for channel in category.channels.all %}
+                    <div class="channel-item {% if current_channel and current_channel.id == channel.id %}active{% endif %}"
+                         onclick="location.href='{% url 'channel_view' server.id channel.id %}'">
+                        <i class="fas {% if channel.channel_type == 'text' %}fa-hashtag{% else %}fa-volume-up{% endif %}"></i>
+                        <span>{{ channel.name }}</span>
+                        {% if channel.channel_type == 'voice' %}
+                        <span class="badge bg-secondary small">{{ channel.voice_channel.user_count|default:0 }}</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            
+            <!-- Каналы без категории -->
+            {% for channel in channels %}
+            {% if not channel.category %}
+            <div class="channel-item {% if current_channel and current_channel.id == channel.id %}active{% endif %}"
+                 onclick="location.href='{% url 'channel_view' server.id channel.id %}'">
+                <i class="fas {% if channel.channel_type == 'text' %}fa-hashtag{% else %}fa-volume-up{% endif %}"></i>
+                <span>{{ channel.name }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <!-- ПАНЕЛЬ ПОЛЬЗОВАТЕЛЯ С РАБОЧИМИ КНОПКАМИ -->
+        <div class="user-bar">
+            <img src="{{ request.user.avatar.url }}" alt="" class="user-avatar" onclick="location.href='{% url 'profile' request.user.id %}'">
+            <div class="user-info" onclick="location.href='{% url 'profile' request.user.id %}'">
+                <div class="user-name">{{ request.user.username }}</div>
+                <div class="user-tag" id="userStatusTag">
+                    <span id="userStatusDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#23a559;margin-right:4px;"></span>
+                    <span id="userStatusText">Онлайн</span>
+                </div>
+            </div>
+            <div class="user-actions">
+                <button id="userMuteBtn" onclick="toggleUserMicrophone()" title="Включить/выключить микрофон">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button id="userDeafenBtn" onclick="toggleUserDeafen()" title="Включить/выключить звук">
+                    <i class="fas fa-headphones"></i>
+                </button>
+                <button onclick="location.href='{% url 'edit_profile' %}'" title="Настройки">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button onclick="logoutUser()" title="Выйти">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основная область -->
+    <div class="main-area">
+        {% if current_channel %}
+        <!-- Заголовок канала -->
+        <div class="main-header">
+            <div class="header-info">
+                <i class="fas {% if current_channel.channel_type == 'text' %}fa-hashtag{% else %}fa-volume-up{% endif %}"></i>
+                <div>
+                    <h4>{{ current_channel.name }}</h4>
+                    {% if current_channel.topic %}
+                    <span class="topic">{{ current_channel.topic }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="header-actions">
+                <button title="Закрепленные сообщения"><i class="fas fa-thumbtack"></i></button>
+                <button title="Уведомления"><i class="fas fa-bell"></i></button>
+                <button title="Поиск"><i class="fas fa-search"></i></button>
+                <button title="Участники"><i class="fas fa-users"></i> {{ members|length }}</button>
+            </div>
+        </div>
+
+        <!-- Сообщения -->
+        <div class="messages-area" id="messagesContainer">
+            <!-- Приветственное сообщение -->
+            <div class="message-group">
+                <div class="message-body">
+                    <div class="text-center py-5">
+                        <i class="fas fa-hashtag fa-3x mb-3" style="color: var(--text-muted); opacity: 0.3;"></i>
+                        <h3>Добро пожаловать в #{{ current_channel.name }}!</h3>
+                        <p class="text-muted">Это начало канала #{{ current_channel.name }}</p>
+                    </div>
+                </div>
+            </div>
+
+            {% for message in messages %}
+            <div class="message-group" id="message-{{ message.id }}">
+                <img src="{{ message.author.avatar.url }}" alt="{{ message.author.username }}" class="message-avatar">
+                <div class="message-body">
+                    <div class="message-header">
+                        <span class="message-author" onclick="location.href='{% url 'profile' message.author.id %}'">
+                            {{ message.author.username }}
+                        </span>
+                        {% if message.author == server.owner %}
+                        <span class="role-badge role-owner">Владелец</span>
+                        {% endif %}
+                        <span class="message-time">{{ message.timestamp|date:"d.m.Y H:i" }}</span>
+                    </div>
+                    <div class="message-text">{{ message.content }}</div>
+                    {% if message.edited %}
+                    <span class="text-muted" style="font-size: 11px;">(изменено)</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Поле ввода -->
+        <div class="input-area">
+            <div class="input-container">
+                <textarea id="messageInput" rows="1" placeholder="Напишите сообщение в #{{ current_channel.name }}"></textarea>
+                <button class="send-button" id="sendMessageBtn" title="Отправить">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+        {% else %}
+        <div class="home-content">
+            <div>
+                <div class="welcome-icon"><i class="fas fa-hashtag"></i></div>
+                <h2>{{ server.name }}</h2>
+                <p>Выберите канал слева для начала общения</p>
+                {% if is_owner %}
+                <button class="btn btn-primary" style="width: auto;" data-bs-toggle="modal" data-bs-target="#createChannelModal">
+                    <i class="fas fa-plus"></i> Создать канал
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if current_channel and current_channel.channel_type == 'voice' %}
+    <!-- ГОЛОСОВОЙ КАНАЛ -->
+    <div class="voice-full-container" style="flex:1;display:flex;flex-direction:column;background:var(--bg-primary);">
+        
+        <!-- Заголовок -->
+        <div class="main-header">
+            <div class="header-info">
+                <i class="fas fa-volume-up" style="color:#23a559;"></i>
+                <h4>{{ current_channel.name }}</h4>
+                <span style="color:var(--text-muted);font-size:13px;margin-left:8px;">
+                    <i class="fas fa-user"></i> <span id="voiceUserCount">0</span>
+                </span>
+            </div>
+            <div class="header-actions">
+                <button id="voicePingBtn" onclick="voicePing()" title="Пинг">
+                    <i class="fas fa-bell"></i>
+                </button>
+                <button onclick="showVoiceSettings()" title="Настройки голоса">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Основная область -->
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;">
+            
+            <!-- Карточка голосового канала -->
+            <div style="background:var(--bg-secondary);border-radius:24px;padding:0;width:100%;max-width:600px;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid rgba(255,255,255,0.05);">
+                
+                <!-- Верхняя часть с участниками -->
+                <div style="padding:32px 32px 24px;">
+                    <h5 style="font-weight:700;margin-bottom:4px;color:var(--text-primary);">
+                        <i class="fas fa-volume-up" style="color:#23a559;margin-right:8px;"></i>{{ current_channel.name }}
+                    </h5>
+                    <p style="color:var(--text-muted);font-size:14px;margin-bottom:24px;">
+                        {% if server.owner == request.user %}Владелец • {% endif %}Голосовой канал
+                    </p>
+                    
+                    <!-- Сетка участников -->
+                    <div id="voiceUsersGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;min-height:80px;">
+                        <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:14px;grid-column:1/-1;">
+                            <i class="fas fa-microphone fa-2x mb-2" style="opacity:0.3;display:block;"></i>
+                            Подключитесь, чтобы общаться
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Нижняя панель управления -->
+                <div style="background:var(--bg-tertiary);padding:20px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                    
+                    <!-- Информация о подключении -->
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div id="voiceAvatar" style="width:44px;height:44px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;position:relative;">
+                            <i class="fas fa-user" style="color:var(--text-muted);font-size:20px;"></i>
+                            <span id="voiceStatusDot" style="position:absolute;bottom:0;right:0;width:14px;height:14px;border-radius:50%;background:#747f8d;border:3px solid var(--bg-tertiary);"></span>
+                        </div>
+                        <div>
+                            <div style="font-weight:700;font-size:15px;">{{ request.user.username }}</div>
+                            <div id="voiceStatusText" style="font-size:12px;color:#747f8d;">Не подключены</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Кнопки управления -->
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button id="muteBtn" class="voice-ctrl-btn" onclick="toggleMute()" disabled
+                                style="width:44px;height:44px;border-radius:50%;border:none;background:var(--bg-hover);color:var(--text-secondary);cursor:pointer;font-size:18px;transition:0.2s;display:flex;align-items:center;justify-content:center;"
+                                title="Выключить микрофон">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                        
+                        <button id="deafenBtn" class="voice-ctrl-btn" onclick="toggleDeafen()" disabled
+                                style="width:44px;height:44px;border-radius:50%;border:none;background:var(--bg-hover);color:var(--text-secondary);cursor:pointer;font-size:18px;transition:0.2s;display:flex;align-items:center;justify-content:center;"
+                                title="Выключить наушники">
+                            <i class="fas fa-headphones"></i>
+                        </button>
+                        
+                        <button onclick="showVoiceSettings()"
+                                style="width:44px;height:44px;border-radius:50%;border:none;background:var(--bg-hover);color:var(--text-secondary);cursor:pointer;font-size:18px;transition:0.2s;display:flex;align-items:center;justify-content:center;"
+                                title="Настройки голоса">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        
+                        <div style="width:1px;height:32px;background:rgba(255,255,255,0.1);margin:0 8px;"></div>
+                        
+                        <button id="joinVoiceBtn" class="btn btn-success" onclick="joinVoiceChannel()" 
+                                style="border-radius:24px;padding:10px 24px;font-weight:700;">
+                            <i class="fas fa-phone-alt me-2"></i> Подключиться
+                        </button>
+                        <button id="leaveVoiceBtn" class="btn btn-danger" onclick="leaveVoiceChannel()" 
+                                style="display:none;border-radius:24px;padding:10px 24px;font-weight:700;">
+                            <i class="fas fa-phone-slash me-2"></i> Отключиться
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Сайдбар участников -->
+    <div class="members-bar">
+        <div class="members-title">УЧАСТНИКИ — {{ members|length }}</div>
+        
+        {% for member in members %}
+        {% if member.role == 'owner' %}
+        <div class="member-item" onclick="location.href='{% url 'profile' member.user.id %}'">
+            <img src="{{ member.user.avatar.url }}" alt="">
+            <span class="member-name">{{ member.nickname|default:member.user.username }}</span>
+            <span class="role-badge role-owner">Владелец</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+        
+        {% for member in members %}
+        {% if member.role == 'admin' %}
+        <div class="member-item" onclick="location.href='{% url 'profile' member.user.id %}'">
+            <img src="{{ member.user.avatar.url }}" alt="">
+            <span class="member-name">{{ member.nickname|default:member.user.username }}</span>
+            <span class="role-badge role-admin">Админ</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+        
+        {% for member in members %}
+        {% if member.role == 'member' %}
+        <div class="member-item" onclick="location.href='{% url 'profile' member.user.id %}'">
+            <img src="{{ member.user.avatar.url }}" alt="">
+            <span class="member-name">{{ member.nickname|default:member.user.username }}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Модальное окно создания канала -->
+<div class="modal fade" id="createChannelModal" tabindex="-1" data-bs-backdrop="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>Создать канал</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createChannelForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">ТИП КАНАЛА</label>
+                        <select name="channel_type" class="form-select">
+                            <option value="text">📝 Текстовый канал</option>
+                            <option value="voice">🔊 Голосовой канал</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">НАЗВАНИЕ КАНАЛА</label>
+                        <input type="text" name="name" class="form-control" placeholder="новый-канал" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">КАТЕГОРИЯ</label>
+                        <select name="category" id="categorySelect" class="form-select">
+                            <option value="">Без категории</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-sm btn-primary">Создать канал</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==================== ОСНОВНЫЕ ПЕРЕМЕННЫЕ ====================
+const channelId = {{ current_channel.id|default:'null' }};
+const serverId = {{ server.id }};
+const userId = {{ request.user.id }};
+const username = '{{ request.user.username }}';
+
+// ==================== УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЕМ (USER ACTIONS) ====================
+let isUserMicrophoneMuted = false;
+let isUserDeafened = false;
+let userStatus = 'online'; // online, idle, dnd, offline
+let userStatuses = ['online', 'idle', 'dnd', 'offline'];
+let userStatusColors = {
+    'online': '#23a559',
+    'idle': '#f0b232',
+    'dnd': '#f23f43',
+    'offline': '#747f8d'
+};
+let userStatusLabels = {
+    'online': 'Онлайн',
+    'idle': 'Не активен',
+    'dnd': 'Не беспокоить',
+    'offline': 'Не в сети'
+};
+
+// Переключение микрофона пользователя
+function toggleUserMicrophone() {
+    isUserMicrophoneMuted = !isUserMicrophoneMuted;
+    const btn = document.getElementById('userMuteBtn');
+    const icon = btn.querySelector('i');
+    
+    if (isUserMicrophoneMuted) {
+        icon.className = 'fas fa-microphone-slash';
+        btn.style.color = '#f23f43';
+        btn.title = 'Включить микрофон';
+        showToast('🔇 Микрофон выключен');
+    } else {
+        icon.className = 'fas fa-microphone';
+        btn.style.color = '';
+        btn.title = 'Выключить микрофон';
+        showToast('🎤 Микрофон включен');
+    }
+    
+    // Синхронизация с голосовым чатом
+    syncWithVoiceChat();
+}
+
+// Переключение звука (наушников) пользователя
+function toggleUserDeafen() {
+    isUserDeafened = !isUserDeafened;
+    const btn = document.getElementById('userDeafenBtn');
+    const icon = btn.querySelector('i');
+    
+    if (isUserDeafened) {
+        icon.className = 'fas fa-deaf';
+        btn.style.color = '#f23f43';
+        btn.title = 'Включить звук';
+        showToast('🔇 Звук выключен');
+    } else {
+        icon.className = 'fas fa-headphones';
+        btn.style.color = '';
+        btn.title = 'Выключить звук';
+        showToast('🔊 Звук включен');
+    }
+    
+    // Синхронизация с голосовым чатом
+    syncWithVoiceChat();
+}
+
+// Синхронизация состояния с голосовым чатом
+function syncWithVoiceChat() {
+    if (typeof isConnected !== 'undefined' && isConnected) {
+        // Синхронизация микрофона
+        if (typeof isMuted !== 'undefined') {
+            isMuted = isUserMicrophoneMuted;
+            if (localStream) {
+                localStream.getAudioTracks().forEach(function(track) {
+                    track.enabled = !isUserMicrophoneMuted;
+                });
+            }
+            if (voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+                voiceSocket.send(JSON.stringify({
+                    type: 'mute',
+                    muted: isUserMicrophoneMuted
+                }));
+            }
+            const voiceMuteBtn = document.getElementById('muteBtn');
+            if (voiceMuteBtn) {
+                if (isUserMicrophoneMuted) {
+                    voiceMuteBtn.classList.add('active-muted');
+                    voiceMuteBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+                } else {
+                    voiceMuteBtn.classList.remove('active-muted');
+                    voiceMuteBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+                }
+            }
+        }
+        
+        // Синхронизация звука
+        if (typeof isDeafened !== 'undefined') {
+            isDeafened = isUserDeafened;
+            document.querySelectorAll('audio[id^="audio-"]').forEach(function(el) {
+                el.muted = isUserDeafened;
+            });
+            const voiceDeafenBtn = document.getElementById('deafenBtn');
+            if (voiceDeafenBtn) {
+                if (isUserDeafened) {
+                    voiceDeafenBtn.classList.add('active-muted');
+                    voiceDeafenBtn.innerHTML = '<i class="fas fa-deaf"></i>';
+                } else {
+                    voiceDeafenBtn.classList.remove('active-muted');
+                    voiceDeafenBtn.innerHTML = '<i class="fas fa-headphones"></i>';
+                }
+            }
+        }
+    }
+}
+
+// Переключение статуса пользователя
+function toggleUserStatus() {
+    const currentIndex = userStatuses.indexOf(userStatus);
+    const nextIndex = (currentIndex + 1) % userStatuses.length;
+    userStatus = userStatuses[nextIndex];
+    
+    updateUserStatusUI();
+    showToast('Статус: ' + userStatusLabels[userStatus]);
+    
+    // Отправка статуса на сервер (если есть API)
+    if (typeof chatSocket !== 'undefined' && chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({
+            type: 'status_update',
+            status: userStatus
+        }));
+    }
+}
+
+// Обновление UI статуса пользователя
+function updateUserStatusUI() {
+    const dot = document.getElementById('userStatusDot');
+    const text = document.getElementById('userStatusText');
+    const statusBtn = document.querySelector('.user-actions button:nth-child(3) i');
+    
+    if (dot) {
+        dot.style.background = userStatusColors[userStatus];
+    }
+    if (text) {
+        text.textContent = userStatusLabels[userStatus];
+    }
+    if (statusBtn) {
+        statusBtn.style.color = userStatusColors[userStatus];
+    }
+}
+
+// Выход пользователя
+function logoutUser() {
+    if (confirm('Вы уверены, что хотите выйти?')) {
+        // Отключаемся от голосового канала если подключены
+        if (typeof leaveVoiceChannel === 'function') {
+            leaveVoiceChannel();
+        }
+        // Закрываем WebSocket если открыт
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+            chatSocket.close();
+        }
+        // Перенаправляем на страницу выхода
+        location.href = '{% url 'logout' %}';
+    }
+}
+
+// ==================== ВЕБСОКЕТ ДЛЯ ЧАТА ====================
+let chatSocket = null;
+
+if (channelId) {
+    chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chat/' + channelId + '/');
+    
+    chatSocket.onopen = function() {
+        console.log('Chat WebSocket connected');
+        // Отправляем статус при подключении
+        chatSocket.send(JSON.stringify({
+            type: 'status_update',
+            status: userStatus
+        }));
+    };
+    
+    chatSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        
+        if (data.type === 'chat_message') {
+            addMessage(data);
+        } else if (data.type === 'message_deleted') {
+            const msg = document.getElementById('message-' + data.message_id);
+            if (msg) {
+                msg.style.opacity = '0';
+                msg.style.transition = 'opacity 0.3s';
+                setTimeout(() => msg.remove(), 300);
+            }
+        } else if (data.type === 'message_edited') {
+            const msg = document.getElementById('message-' + data.message_id);
+            if (msg) {
+                msg.querySelector('.message-text').textContent = data.content;
+                if (!msg.querySelector('.edited-tag')) {
+                    const tag = document.createElement('span');
+                    tag.className = 'edited-tag';
+                    tag.style.cssText = 'font-size:11px;color:#999;margin-left:8px;';
+                    tag.textContent = '(изменено)';
+                    msg.querySelector('.message-header').appendChild(tag);
+                }
+            }
+        } else if (data.type === 'message_pinned') {
+            showToast(data.is_pinned ? '📌 Сообщение закреплено!' : 'Сообщение откреплено!');
+        } else if (data.type === 'status_update') {
+            // Обновление статуса другого пользователя
+            updateUserStatusInChat(data.user_id, data.status);
+        }
+    };
+    
+    chatSocket.onclose = function() {
+        console.log('Chat WebSocket disconnected');
+        setTimeout(() => {
+            if (channelId) {
+                chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chat/' + channelId + '/');
+            }
+        }, 3000);
+    };
+}
+
+// Обновление статуса пользователя в чате
+function updateUserStatusInChat(userId, status) {
+    // Находим все сообщения этого пользователя и обновляем индикатор
+    const messages = document.querySelectorAll('.message-group');
+    messages.forEach(function(msg) {
+        const authorEl = msg.querySelector('.message-author');
+        if (authorEl && authorEl.textContent.trim() === userId) {
+            // Можно добавить индикатор статуса
+        }
+    });
+}
+
+// ==================== ОТПРАВКА СООБЩЕНИЙ ====================
+function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    
+    if (message && chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({
+            type: 'message',
+            message: message,
+            channel_id: channelId
+        }));
+        input.value = '';
+        input.style.height = 'auto';
+    }
+}
+
+document.getElementById('sendMessageBtn').addEventListener('click', sendMessage);
+
+document.getElementById('messageInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+document.getElementById('messageInput').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+});
+
+// ==================== ДОБАВЛЕНИЕ СООБЩЕНИЙ ====================
+function addMessage(data) {
+    var container = document.getElementById('messagesContainer');
+    var msgDiv = document.createElement('div');
+    msgDiv.className = 'message-group';
+    msgDiv.id = 'message-' + data.message_id;
+    
+    var time = data.timestamp ? new Date(data.timestamp).toLocaleString('ru-RU') : '';
+    
+    var content = '';
+    if (data.image_url) {
+        content = `
+            ${data.message ? '<div class="message-text">' + escapeHtml(data.message) + '</div>' : ''}
+            <img src="${data.image_url}" style="max-width:400px;max-height:300px;border-radius:12px;margin-top:8px;cursor:pointer;" 
+                 onclick="window.open(this.src)" onerror="this.style.display='none'">
+        `;
+    } else {
+        content = '<div class="message-text">' + escapeHtml(data.message) + '</div>';
+    }
+    
+    msgDiv.innerHTML = `
+        <img src="${data.avatar || '/media/avatars/default.png'}" alt="${data.username}" class="message-avatar">
+        <div class="message-body">
+            <div class="message-header">
+                <span class="message-author">${data.username}</span>
+                <span class="message-time">${time}</span>
+            </div>
+            ${content}
+        </div>
+    `;
+    
+    container.appendChild(msgDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ==================== ГОЛОСОВОЙ ЧАТ ====================
+let voiceSocket = null;
+let localStream = null;
+let peerConnections = {};
+let isMuted = false;
+let isDeafened = false;
+let isConnected = false;
+let speakingInterval = null;
+
+async function joinVoiceChannel() {
+    if (isConnected) return;
+    
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            },
+            video: false
+        });
+        
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        voiceSocket = new WebSocket(protocol + '//' + window.location.host + '/ws/voice/' + channelId + '/');
+        
+        voiceSocket.onopen = function() {
+            console.log('Voice WebSocket connected');
+            isConnected = true;
+            
+            document.getElementById('joinVoiceBtn').style.display = 'none';
+            document.getElementById('leaveVoiceBtn').style.display = 'inline-flex';
+            document.getElementById('muteBtn').disabled = false;
+            document.getElementById('deafenBtn').disabled = false;
+            document.getElementById('voiceStatusDot').style.background = '#23a559';
+            document.getElementById('voiceStatusText').textContent = 'Голос подключен';
+            document.getElementById('voiceStatusText').style.color = '#23a559';
+            
+            // Синхронизируем состояние микрофона и звука
+            if (isUserMicrophoneMuted) {
+                document.getElementById('muteBtn').classList.add('active-muted');
+                document.getElementById('muteBtn').innerHTML = '<i class="fas fa-microphone-slash"></i>';
+            }
+            if (isUserDeafened) {
+                document.getElementById('deafenBtn').classList.add('active-muted');
+                document.getElementById('deafenBtn').innerHTML = '<i class="fas fa-deaf"></i>';
+            }
+            
+            voiceSocket.send(JSON.stringify({
+                type: 'join',
+                user_id: userId,
+                username: username
+            }));
+            
+            startSpeakingDetection();
+        };
+        
+        voiceSocket.onmessage = async function(e) {
+            const data = JSON.parse(e.data);
+            
+            if (data.type === 'connected_users') {
+                updateVoiceGrid(data.users);
+                data.users.forEach(function(u) {
+                    if (u.user_id !== userId) {
+                        createPC(u.user_id);
+                        setTimeout(() => sendOffer(u.user_id), 500);
+                    }
+                });
+            } else if (data.type === 'user_joined' && data.user_id !== userId) {
+                addVoiceGridUser(data);
+                createPC(data.user_id);
+                setTimeout(() => sendOffer(data.user_id), 500);
+            } else if (data.type === 'user_left') {
+                removeVoiceGridUser(data.user_id);
+                closePC(data.user_id);
+            } else if (data.type === 'offer') {
+                await handleOffer(data);
+            } else if (data.type === 'answer') {
+                await handleAnswer(data);
+            } else if (data.type === 'ice_candidate') {
+                await handleICE(data);
+            } else if (data.type === 'user_muted') {
+                updateGridMute(data);
+            } else if (data.type === 'user_speaking') {
+                updateGridSpeaking(data);
+            }
+        };
+        
+        voiceSocket.onclose = function() {
+            cleanupVoice();
+        };
+        
+    } catch(e) {
+        console.error('Error joining voice:', e);
+        alert('Не удалось получить доступ к микрофону!');
+    }
+}
+
+function leaveVoiceChannel() {
+    cleanupVoice();
+}
+
+function cleanupVoice() {
+    isConnected = false;
+    
+    if (speakingInterval) {
+        clearInterval(speakingInterval);
+        speakingInterval = null;
+    }
+    
+    Object.values(peerConnections).forEach(function(pc) {
+        try { pc.close(); } catch(e) {}
+    });
+    peerConnections = {};
+    
+    if (localStream) {
+        localStream.getTracks().forEach(function(track) {
+            try { track.stop(); } catch(e) {}
+        });
+        localStream = null;
+    }
+    
+    if (voiceSocket) {
+        try { voiceSocket.close(); } catch(e) {}
+        voiceSocket = null;
+    }
+    
+    document.querySelectorAll('audio[id^="audio-"]').forEach(function(el) {
+        try { el.remove(); } catch(e) {}
+    });
+    
+    document.getElementById('joinVoiceBtn').style.display = 'inline-flex';
+    document.getElementById('leaveVoiceBtn').style.display = 'none';
+    document.getElementById('muteBtn').disabled = true;
+    document.getElementById('deafenBtn').disabled = true;
+    document.getElementById('muteBtn').classList.remove('active-muted');
+    document.getElementById('deafenBtn').classList.remove('active-muted');
+    document.getElementById('muteBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+    document.getElementById('deafenBtn').innerHTML = '<i class="fas fa-headphones"></i>';
+    document.getElementById('voiceStatusDot').style.background = '#747f8d';
+    document.getElementById('voiceStatusText').textContent = 'Не подключены';
+    document.getElementById('voiceStatusText').style.color = '#747f8d';
+    document.getElementById('voiceUserCount').textContent = '0';
+    document.getElementById('voiceUsersGrid').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:14px;grid-column:1/-1;"><i class="fas fa-microphone fa-2x mb-2" style="opacity:0.3;display:block;"></i>Подключитесь, чтобы общаться</div>';
+}
+
+function toggleMute() {
+    if (!isConnected || !localStream) return;
+    
+    isMuted = !isMuted;
+    isUserMicrophoneMuted = isMuted;
+    
+    localStream.getAudioTracks().forEach(function(track) {
+        track.enabled = !isMuted;
+    });
+    
+    const btn = document.getElementById('muteBtn');
+    const userBtn = document.getElementById('userMuteBtn');
+    
+    if (isMuted) {
+        btn.classList.add('active-muted');
+        btn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+        userBtn.querySelector('i').className = 'fas fa-microphone-slash';
+        userBtn.style.color = '#f23f43';
+        document.getElementById('voiceStatusText').textContent = 'Микрофон выключен';
+        document.getElementById('voiceStatusText').style.color = '#f23f43';
+    } else {
+        btn.classList.remove('active-muted');
+        btn.innerHTML = '<i class="fas fa-microphone"></i>';
+        userBtn.querySelector('i').className = 'fas fa-microphone';
+        userBtn.style.color = '';
+        document.getElementById('voiceStatusText').textContent = 'Голос подключен';
+        document.getElementById('voiceStatusText').style.color = '#23a559';
+    }
+    
+    if (voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+        voiceSocket.send(JSON.stringify({
+            type: 'mute',
+            muted: isMuted
+        }));
+    }
+}
+
+function toggleDeafen() {
+    if (!isConnected) return;
+    
+    isDeafened = !isDeafened;
+    isUserDeafened = isDeafened;
+    
+    const btn = document.getElementById('deafenBtn');
+    const userBtn = document.getElementById('userDeafenBtn');
+    
+    if (isDeafened) {
+        btn.classList.add('active-muted');
+        btn.innerHTML = '<i class="fas fa-deaf"></i>';
+        userBtn.querySelector('i').className = 'fas fa-deaf';
+        userBtn.style.color = '#f23f43';
+        document.querySelectorAll('audio[id^="audio-"]').forEach(function(el) {
+            el.muted = true;
+        });
+    } else {
+        btn.classList.remove('active-muted');
+        btn.innerHTML = '<i class="fas fa-headphones"></i>';
+        userBtn.querySelector('i').className = 'fas fa-headphones';
+        userBtn.style.color = '';
+        document.querySelectorAll('audio[id^="audio-"]').forEach(function(el) {
+            el.muted = false;
+        });
+    }
+}
+
+function startSpeakingDetection() {
+    if (!localStream) return;
+    
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+        const microphone = audioContext.createMediaStreamSource(localStream);
+        microphone.connect(analyser);
+        analyser.fftSize = 256;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let speaking = false;
+        
+        if (speakingInterval) clearInterval(speakingInterval);
+        
+        speakingInterval = setInterval(function() {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            const isNowSpeaking = average > 25;
+            
+            if (isNowSpeaking !== speaking && !isMuted) {
+                speaking = isNowSpeaking;
+                if (voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+                    voiceSocket.send(JSON.stringify({
+                        type: 'speaking',
+                        speaking: speaking
+                    }));
+                }
+                
+                const card = document.getElementById('vu-card-' + userId);
+                if (card) {
+                    if (speaking) {
+                        card.classList.add('speaking');
+                        const avatar = card.querySelector('.voice-user-avatar');
+                        if (avatar && !avatar.querySelector('.speaking-ring')) {
+                            const ring = document.createElement('div');
+                            ring.className = 'speaking-ring';
+                            avatar.appendChild(ring);
+                        }
+                        const status = card.querySelector('[style*="font-size:11px"]');
+                        if (status) status.innerHTML = '<span style="color:#23a559;">● Говорит</span>';
+                    } else {
+                        card.classList.remove('speaking');
+                        const ring = card.querySelector('.speaking-ring');
+                        if (ring) ring.remove();
+                        const status = card.querySelector('[style*="font-size:11px"]');
+                        if (status && !status.querySelector('.fa-microphone-slash')) status.innerHTML = '';
+                    }
+                }
+            }
+        }, 100);
+    } catch(e) {
+        console.error('Error starting speaking detection:', e);
+    }
+}
+
+// ==================== WEBRTC ФУНКЦИИ ====================
+function createPC(uid) {
+    try {
+        const pc = new RTCPeerConnection({
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        });
+        
+        pc.onicecandidate = function(e) {
+            if (e.candidate && voiceSocket && voiceSocket.readyState === WebSocket.OPEN) {
+                voiceSocket.send(JSON.stringify({
+                    type: 'ice_candidate',
+                    candidate: e.candidate,
+                    to_user_id: uid
+                }));
+            }
+        };
+        
+        pc.ontrack = function(e) {
+            try {
+                const audio = document.createElement('audio');
+                audio.srcObject = e.streams[0];
+                audio.autoplay = true;
+                audio.id = 'audio-' + uid;
+                audio.muted = isDeafened;
+                document.body.appendChild(audio);
+            } catch(err) {
+                console.error('Error adding track:', err);
+            }
+        };
+        
+        pc.onconnectionstatechange = function() {
+            if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                delete peerConnections[uid];
+            }
+        };
+        
+        if (localStream) {
+            localStream.getTracks().forEach(function(track) {
+                try { pc.addTrack(track, localStream); } catch(e) {}
+            });
+        }
+        
+        peerConnections[uid] = pc;
+        return pc;
+    } catch(e) {
+        console.error('Error creating peer connection:', e);
+        return null;
+    }
+}
+
+async function sendOffer(uid) {
+    const pc = peerConnections[uid];
+    if (!pc || !voiceSocket) return;
+    
+    try {
+        const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: false
+        });
+        await pc.setLocalDescription(offer);
+        
+        voiceSocket.send(JSON.stringify({
+            type: 'offer',
+            sdp: offer,
+            to_user_id: uid
+        }));
+    } catch(e) {
+        console.error('Error sending offer:', e);
+    }
+}
+
+async function handleOffer(data) {
+    const pc = createPC(data.from_user_id);
+    if (!pc) return;
+    
+    try {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        
+        voiceSocket.send(JSON.stringify({
+            type: 'answer',
+            sdp: answer,
+            to_user_id: data.from_user_id
+        }));
+    } catch(e) {
+        console.error('Error handling offer:', e);
+    }
+}
+
+async function handleAnswer(data) {
+    const pc = peerConnections[data.from_user_id];
+    if (pc) {
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        } catch(e) {
+            console.error('Error handling answer:', e);
+        }
+    }
+}
+
+async function handleICE(data) {
+    const pc = peerConnections[data.from_user_id];
+    if (pc && data.candidate) {
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch(e) {
+            console.error('Error adding ICE candidate:', e);
+        }
+    }
+}
+
+function closePC(uid) {
+    try {
+        if (peerConnections[uid]) {
+            peerConnections[uid].close();
+            delete peerConnections[uid];
+        }
+        const audioEl = document.getElementById('audio-' + uid);
+        if (audioEl) audioEl.remove();
+    } catch(e) {}
+}
+
+// ==================== UI ОБНОВЛЕНИЯ ====================
+function updateVoiceGrid(users) {
+    const grid = document.getElementById('voiceUsersGrid');
+    document.getElementById('voiceUserCount').textContent = users.length;
+    
+    if (users.length === 0) {
+        grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:14px;grid-column:1/-1;"><i class="fas fa-microphone fa-2x mb-2" style="opacity:0.3;display:block;"></i>Подключитесь, чтобы общаться</div>';
+        return;
+    }
+    
+    grid.innerHTML = users.map(function(u) {
+        return `
+            <div class="voice-user-card ${u.is_speaking ? 'speaking' : ''}" id="vu-card-${u.user_id}">
+                <div class="voice-user-avatar">
+                    <i class="fas fa-user" style="color:var(--text-muted);font-size:20px;"></i>
+                    ${u.is_speaking ? '<div class="speaking-ring"></div>' : ''}
+                </div>
+                <div style="font-weight:600;font-size:14px;">${u.username}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+                    ${u.is_muted ? '<i class="fas fa-microphone-slash" style="color:#f23f43;"></i> Выкл' : 
+                      u.is_speaking ? '<span style="color:#23a559;">● Говорит</span>' : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function addVoiceGridUser(data) {
+    const grid = document.getElementById('voiceUsersGrid');
+    if (grid.querySelector('[style*="Подключитесь"]')) grid.innerHTML = '';
+    document.getElementById('voiceUserCount').textContent = grid.children.length + 1;
+    
+    const card = document.createElement('div');
+    card.className = 'voice-user-card';
+    card.id = 'vu-card-' + data.user_id;
+    card.innerHTML = `
+        <div class="voice-user-avatar">
+            <i class="fas fa-user" style="color:var(--text-muted);font-size:20px;"></i>
+        </div>
+        <div style="font-weight:600;font-size:14px;">${data.username}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
+    `;
+    grid.appendChild(card);
+}
+
+function removeVoiceGridUser(uid) {
+    const card = document.getElementById('vu-card-' + uid);
+    if (card) card.remove();
+    const grid = document.getElementById('voiceUsersGrid');
+    document.getElementById('voiceUserCount').textContent = grid.querySelectorAll('.voice-user-card').length;
+    if (grid.querySelectorAll('.voice-user-card').length === 0) {
+        grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:14px;grid-column:1/-1;"><i class="fas fa-microphone fa-2x mb-2" style="opacity:0.3;display:block;"></i>Подключитесь, чтобы общаться</div>';
+    }
+}
+
+function updateGridMute(data) {
+    const card = document.getElementById('vu-card-' + data.user_id);
+    if (card) {
+        const status = card.querySelector('[style*="font-size:11px"]');
+        if (status) {
+            if (data.muted) {
+                status.innerHTML = '<i class="fas fa-microphone-slash" style="color:#f23f43;"></i> Выкл';
+            } else {
+                status.innerHTML = '';
+            }
+        }
+    }
+}
+
+function updateGridSpeaking(data) {
+    const card = document.getElementById('vu-card-' + data.user_id);
+    if (card) {
+        const status = card.querySelector('[style*="font-size:11px"]');
+        if (data.speaking) {
+            card.classList.add('speaking');
+            const avatar = card.querySelector('.voice-user-avatar');
+            if (avatar && !avatar.querySelector('.speaking-ring')) {
+                const ring = document.createElement('div');
+                ring.className = 'speaking-ring';
+                avatar.appendChild(ring);
+            }
+            if (status && !status.querySelector('.fa-microphone-slash')) {
+                status.innerHTML = '<span style="color:#23a559;">● Говорит</span>';
+            }
+        } else {
+            card.classList.remove('speaking');
+            const ring = card.querySelector('.speaking-ring');
+            if (ring) ring.remove();
+            if (status && !status.querySelector('.fa-microphone-slash')) {
+                status.innerHTML = '';
+            }
+        }
+    }
+}
+
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+function voicePing() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.1;
+        oscillator.start();
+        setTimeout(() => oscillator.stop(), 100);
+    } catch(e) {}
+}
+
+function showVoiceSettings() {
+    alert('🎤 Микрофон: ' + (isUserMicrophoneMuted ? 'Выключен' : 'Включен') + 
+          '\n🔊 Динамики: ' + (isUserDeafened ? 'Выключены' : 'Включены') +
+          '\n📱 Статус: ' + userStatusLabels[userStatus]);
+}
+
+function showToast(message) {
+    var toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1a1a1a;
+        color: #f0b232;
+        padding: 12px 24px;
+        border-radius: 12px;
+        border: 1px solid rgba(240, 178, 50, 0.3);
+        font-weight: 600;
+        z-index: 9999;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        animation: slideUp 0.3s ease;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 2000);
+}
+
+function toggleCategory(header) {
+    const channels = header.nextElementSibling;
+    const icon = header.querySelector('i');
+    
+    if (channels.style.display === 'none') {
+        channels.style.display = 'block';
+        icon.classList.remove('fa-chevron-right');
+        icon.classList.add('fa-chevron-down');
+    } else {
+        channels.style.display = 'none';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-right');
+    }
+}
+
+function setCategory(categoryId) {
+    document.getElementById('categorySelect').value = categoryId;
+}
+
+function copyInvite(code) {
+    navigator.clipboard.writeText(code).then(() => {
+        showToast('📋 Код приглашения скопирован: ' + code);
+    });
+}
+
+// Инициализация статуса
+document.addEventListener('DOMContentLoaded', function() {
+    updateUserStatusUI();
+});
+
+// ==================== КОНТЕКСТНОЕ МЕНЮ ====================
+document.getElementById('messagesContainer').addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    
+    var msgDiv = e.target.closest('.message-group');
+    if (!msgDiv) return;
+    
+    var messageId = msgDiv.id.replace('message-', '');
+    var authorName = msgDiv.querySelector('.message-author').textContent.trim();
+    var isOwnMessage = (authorName === username);
+    
+    var oldMenu = document.querySelector('.context-menu');
+    if (oldMenu) oldMenu.remove();
+    
+    var menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.cssText = `
+        position: fixed;
+        left: ${e.clientX}px;
+        top: ${e.clientY}px;
+        background: #1a1a1a;
+        border: 1px solid rgba(240, 178, 50, 0.3);
+        border-radius: 12px;
+        padding: 8px 0;
+        z-index: 9999;
+        min-width: 200px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    `;
+    
+    var menuItems = [
+        {
+            icon: 'fa-copy',
+            text: 'Копировать текст',
+            color: '#ccc',
+            action: function() {
+                var text = msgDiv.querySelector('.message-text').textContent;
+                navigator.clipboard.writeText(text).then(() => showToast('📋 Текст скопирован!'));
+                menu.remove();
+            }
+        },
+        {
+            icon: 'fa-thumbtack',
+            text: 'Закрепить',
+            color: '#f0b232',
+            action: function() {
+                if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                    chatSocket.send(JSON.stringify({
+                        type: 'pin_message',
+                        message_id: messageId
+                    }));
+                    showToast('📌 Сообщение закреплено!');
+                }
+                menu.remove();
+            }
+        }
+    ];
+    
+    if (isOwnMessage) {
+        menuItems.push({
+            icon: 'fa-edit',
+            text: 'Редактировать',
+            color: '#4fc3f7',
+            action: function() {
+                editMessageUI(messageId);
+                menu.remove();
+            }
+        });
+        menuItems.push({
+            icon: 'fa-trash',
+            text: 'Удалить',
+            color: '#f23f43',
+            action: function() {
+                if (confirm('Удалить сообщение?')) {
+                    if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                        chatSocket.send(JSON.stringify({
+                            type: 'delete_message',
+                            message_id: messageId
+                        }));
+                    }
+                }
+                menu.remove();
+            }
+        });
+    }
+    
+    menuItems.forEach(function(item) {
+        var div = document.createElement('div');
+        div.style.cssText = `
+            padding: 10px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: ${item.color};
+            transition: background 0.15s;
+        `;
+        div.innerHTML = `<i class="fas ${item.icon}" style="width: 20px; text-align: center;"></i> ${item.text}`;
+        div.onmouseenter = function() { this.style.background = 'rgba(240, 178, 50, 0.15)'; };
+        div.onmouseleave = function() { this.style.background = 'transparent'; };
+        div.onclick = item.action;
+        menu.appendChild(div);
+    });
+    
+    document.body.appendChild(menu);
+    
+    setTimeout(function() {
+        document.addEventListener('click', function closeMenu() {
+            if (menu.parentNode) menu.remove();
+            document.removeEventListener('click', closeMenu);
+        });
+    }, 0);
+});
+
+// ==================== РЕДАКТИРОВАНИЕ СООБЩЕНИЙ ====================
+function editMessageUI(messageId) {
+    var msgDiv = document.getElementById('message-' + messageId);
+    if (!msgDiv) return;
+    
+    var textDiv = msgDiv.querySelector('.message-text');
+    var oldText = textDiv.textContent;
+    
+    var input = document.createElement('textarea');
+    input.value = oldText;
+    input.style.cssText = `
+        width: 100%;
+        background: #0d0d0d;
+        border: 2px solid #f0b232;
+        border-radius: 8px;
+        color: #fff;
+        padding: 10px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 40px;
+    `;
+    
+    var actions = document.createElement('div');
+    actions.style.cssText = 'display: flex; gap: 8px; margin-top: 8px;';
+    actions.innerHTML = `
+        <button class="btn-save" style="background: #f0b232; color: #000; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+            <i class="fas fa-save"></i> Сохранить
+        </button>
+        <button class="btn-cancel" style="background: #333; color: #fff; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+            Отмена
+        </button>
+    `;
+    
+    textDiv.style.display = 'none';
+    textDiv.parentNode.insertBefore(input, textDiv.nextSibling);
+    textDiv.parentNode.insertBefore(actions, input.nextSibling);
+    input.focus();
+    
+    var saveBtn = actions.querySelector('.btn-save');
+    saveBtn.onclick = function() {
+        var newText = input.value.trim();
+        if (newText && newText !== oldText) {
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                chatSocket.send(JSON.stringify({
+                    type: 'edit_message',
+                    message_id: messageId,
+                    content: newText
+                }));
+            }
+            textDiv.textContent = newText;
+            textDiv.style.display = '';
+            input.remove();
+            actions.remove();
+            if (!msgDiv.querySelector('.edited-tag')) {
+                var tag = document.createElement('span');
+                tag.className = 'edited-tag';
+                tag.style.cssText = 'font-size: 11px; color: #999; margin-left: 8px;';
+                tag.textContent = '(изменено)';
+                msgDiv.querySelector('.message-header').appendChild(tag);
+            }
+        } else {
+            cancelEdit();
+        }
+    };
+    
+    var cancelBtn = actions.querySelector('.btn-cancel');
+    cancelBtn.onclick = cancelEdit;
+    
+    function cancelEdit() {
+        textDiv.style.display = '';
+        input.remove();
+        actions.remove();
+    }
+    
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') cancelEdit();
+        if (e.key === 'Enter' && e.ctrlKey) saveBtn.click();
+    });
+}
+</script>
+
+<style>
+.category-channels {
+    display: block;
+}
+
+.form-select {
+    background-color: var(--bg-tertiary) !important;
+    border-color: var(--border) !important;
+    color: var(--text-primary) !important;
+}
+
+.dropdown-menu-dark .dropdown-item {
+    color: var(--text-primary);
+}
+
+.dropdown-menu-dark .dropdown-item:hover {
+    background-color: var(--brand);
+}
+
+.voice-ctrl-btn.active-muted {
+    background: #f23f43 !important;
+    color: white !important;
+}
+.voice-ctrl-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+}
+.voice-ctrl-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.voice-user-card {
+    background: var(--bg-hover);
+    border-radius: 12px;
+    padding: 16px 12px;
+    text-align: center;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+    position: relative;
+}
+.voice-user-card:hover {
+    border-color: rgba(240,178,50,0.3);
+}
+.voice-user-card.speaking {
+    border-color: #23a559 !important;
+    box-shadow: 0 0 15px rgba(35,165,89,0.3);
+}
+.voice-user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    margin: 0 auto 8px;
+    background: var(--bg-active);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+.voice-user-avatar .speaking-ring {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 3px solid #23a559;
+    animation: speakingPulse 1s infinite;
+}
+@keyframes speakingPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.05); }
+}
+
+/* Стили для кнопок пользователя */
+.user-actions button {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.user-actions button:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.user-actions button i {
+    font-size: 16px;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+</style>
+{% endblock %}
